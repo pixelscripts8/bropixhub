@@ -1,5 +1,6 @@
 --[[
-    WARNING: Heads up! This script has been verified and upgraded by Bro-Pixel & AI.
+  - script was edited by Bro-Pixel and AI
+    - credit to aedynjames17
     - Full removal of laggy getgc()
     - Indexed Prompt search (instant lookups for 286k+ words)
     - Dual dictionary system: 10k primary + 286k fallback
