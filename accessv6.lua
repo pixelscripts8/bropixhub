@@ -1,8 +1,7 @@
 --[[
-  - script was edited by Bro-Pixel and AI
-    - credit to aedynjames17
+    WARNING: Heads up! This script has been verified and upgraded by Bro-Pixel & AI.
     - Full removal of laggy getgc()
-    - Indexed Prompt search (instant lookups for 286k+ words)
+    - Fixed Indexed Prompt search (instant lookups for 286k+ words)
     - Dual dictionary system: 10k primary + 286k fallback
     - Lightweight anti-repeat listener for other players' words
     - Cleaned special characters (- and ') to prevent typing errors
@@ -59,104 +58,61 @@ local WordList_Three = {
     "immunochemesties", "army", "haha", "hah",
 }
 
--- Строим два пула: primary (основной) и fallback (мега-словарь) с очисткой от спецсимволов
-local PrimaryMegaList = {}
-local function mergePrimary(tbl)
-    if type(tbl) ~= "table" then return end
-    for _, v in pairs(tbl) do
-        if type(v) == "string" then 
-            local clean = string.lower(v):gsub("[%-%']", "")
-            if #clean >= 2 then
-                PrimaryMegaList[#PrimaryMegaList + 1] = clean 
+-- Блок сборки и индексирования словарей
+local PrimaryPromptIndex = {}
+local FallbackPromptIndex = {}
+
+local function buildIndex(sourceTbl, indexTbl)
+    if type(sourceTbl) ~= "table" then return end
+    local seen = {}
+    for _, v in pairs(sourceTbl) do
+        if type(v) == "string" then
+            local word = string.lower(v):gsub("[%-%']", "")
+            if #word >= 2 and not seen[word] then
+                seen[word] = true
+                local len = #word
+                local seenSub = {}
+                for l = 2, math.min(len, 4) do
+                    for i = 1, len - l + 1 do
+                        local sub = string.sub(word, i, i + l - 1)
+                        if not seenSub[sub] then
+                            seenSub[sub] = true
+                            local list = indexTbl[sub]
+                            if not list then
+                                list = {}
+                                indexTbl[sub] = list
+                            end
+                            list[#list + 1] = word
+                        end
+                    end
+                end
             end
         end
     end
 end
 
+-- Создаем основной словарь (10k) и индекс
+local primaryRaw = {}
+local function mergePrimary(tbl)
+    if type(tbl) ~= "table" then return end
+    for _, v in pairs(tbl) do primaryRaw[#primaryRaw + 1] = v end
+end
 mergePrimary(WordList)
 mergePrimary(WordList_Two)
 mergePrimary(WordList_Three)
+buildIndex(primaryRaw, PrimaryPromptIndex)
 
-local seenPrimary = {}
-local PrimaryWords = {}
-for _, word in ipairs(PrimaryMegaList) do
-    if not seenPrimary[word] then
-        seenPrimary[word] = true
-        PrimaryWords[#PrimaryWords + 1] = word
-    end
-end
-
-local FallbackMegaList = {}
+-- Создаем мега-словарь (286k фоллбэк) и индекс
+local fallbackRaw = {}
 local function mergeFallback(tbl)
     if type(tbl) ~= "table" then return end
-    for _, v in pairs(tbl) do
-        if type(v) == "string" then 
-            local clean = string.lower(v):gsub("[%-%']", "")
-            if #clean >= 2 then
-                FallbackMegaList[#FallbackMegaList + 1] = clean 
-            end
-        end
-    end
+    for _, v in pairs(tbl) do fallbackRaw[#fallbackRaw + 1] = v end
 end
-
 mergeFallback(ENGLISH_WORDS)
 mergeFallback(WordList)
 mergeFallback(WordList_Two)
 mergeFallback(WordList_Three)
-
-local seenFallback = {}
-local FallbackWords = {}
-for _, word in ipairs(FallbackMegaList) do
-    if not seenFallback[word] then
-        seenFallback[word] = true
-        FallbackWords[#FallbackWords + 1] = word
-    end
-end
-
--- Индексирование словарей (PromptIndex) для мгновенного поиска без лагов
-local PrimaryPromptIndex = {}
-for _, word in ipairs(PrimaryWords) do
-    local len = #word
-    local seenSub = {}
-    if len >= 2 then
-        for l = 2, 3 do
-            for i = 1, len - l + 1 do
-                local sub = string.sub(word, i, i + l - 1)
-                if not seenSub[sub] then
-                    seenSub[sub] = true
-                    local list = PrimaryPromptIndex[sub]
-                    if not list then
-                        list = {}
-                        PrimaryPromptIndex[sub] = list
-                    end
-                    list[#list + 1] = word
-                end
-            end
-        end
-    end
-end
-
-local FallbackPromptIndex = {}
-for _, word in ipairs(FallbackWords) do
-    local len = #word
-    local seenSub = {}
-    if len >= 2 then
-        for l = 2, 3 do
-            for i = 1, len - l + 1 do
-                local sub = string.sub(word, i, i + l - 1)
-                if not seenSub[sub] then
-                    seenSub[sub] = true
-                    local list = FallbackPromptIndex[sub]
-                    if not list then
-                        list = {}
-                        FallbackPromptIndex[sub] = list
-                    end
-                    list[#list + 1] = word
-                end
-            end
-        end
-    end
-end
+buildIndex(fallbackRaw, FallbackPromptIndex)
 
 local TypoNeighbours = {
     a="s", b="v", c="v", d="f", e="w", f="d", g="h", h="j",
@@ -213,13 +169,14 @@ local function GetLetterDelay()
     return math.max(base, 0.005)
 end
 
--- Функция поиска с индексацией и очисткой промпта
+-- Исправленная функция поиска с поддержкой индекса
 local function FindWordAuto(prompt)
     if not prompt or prompt == "" then return nil end
     local lowerPrompt = string.lower(prompt):gsub("[%-%'%s+]", "")
     
     local function searchInIndex(index)
-        local candidates = index[string.sub(lowerPrompt, 1, 3)] or index[string.sub(lowerPrompt, 1, 2)]
+        local subKey = string.sub(lowerPrompt, 1, math.min(#lowerPrompt, 3))
+        local candidates = index[subKey] or index[string.sub(lowerPrompt, 1, 2)]
         if not candidates then return nil end
         
         local best, bestLen = nil, 0
@@ -238,7 +195,10 @@ local function FindWordAuto(prompt)
         return best
     end
 
+    -- 1. Сначала ищем в основном словаре (10k)
     local found = searchInIndex(PrimaryPromptIndex)
+    
+    -- 2. Фоллбэк на мега-словарь (286k) если в основном пусто
     if not found then
         found = searchInIndex(FallbackPromptIndex)
     end
