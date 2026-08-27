@@ -1,8 +1,8 @@
 --[[
-    WARNING: Heads up! UnpatchaBomb Pro Edition (Classic + 286k Render Fallback + Top Word Finder + Real Net Tracker)
-    - Strict classic + 286k Render fallback pool
-    - Clean top screen word preview overlay
-    - Legitimate network listener for actually submitted words
+    WARNING: Heads up! UnpatchaBomb Pro Edition (Safe Loader & Top Search Overlay)
+    - Protected against nil value errors on mobile/executors
+    - Top screen word preview overlay
+    - Classic pool + 286k Render fallback + Net tracking
 ]]
 
 local Services = {
@@ -24,19 +24,22 @@ local userProvidedKey = _G_ENV.PixelKey or _G.PixelKey or (type(PixelKey) ~= "ni
 local rawHwid = (type(gethwid) == "function" and gethwid()) or (game:GetService("RbxAnalyticsService"):GetClientId())
 local dictUrl = (userProvidedKey and userProvidedKey ~= "") and string.format("https://roblox-key-api-zxnv.onrender.com/dictionary?key=%s&hwid=%s", tostring(userProvidedKey), tostring(rawHwid)) or nil
 
--- Загружаем оригинальные словари
+-- Защищенная загрузка словарей без риска поймать nil value
 pcall(function()
-    loadstring(game:HttpGet("https://raw.githubusercontent.com/MarsQQ/Unpatchabomb/master/unpatchabomb_english_words", true))()
+    local fn = loadstring(game:HttpGet("https://raw.githubusercontent.com/MarsQQ/Unpatchabomb/master/unpatchabomb_english_words", true))
+    if fn then fn() end
 end)
 
 local WordList = {}
 pcall(function()
-    WordList = loadstring(game:HttpGet("https://raw.githubusercontent.com/jjengu/scripts/refs/heads/main/wordbomb/words.lua"))() or {}
+    local res = loadstring(game:HttpGet("https://raw.githubusercontent.com/jjengu/scripts/refs/heads/main/wordbomb/words.lua"))
+    if res then WordList = res() or {} end
 end)
 
 local WordList_Two = {}
 pcall(function()
-    WordList_Two = loadstring(game:HttpGet("https://raw.githubusercontent.com/jjengu/scripts/refs/heads/main/wordbomb/words_two.lua"))() or {}
+    local res = loadstring(game:HttpGet("https://raw.githubusercontent.com/jjengu/scripts/refs/heads/main/wordbomb/words_two.lua"))
+    if res then WordList_Two = res() or {} end
 end)
 
 local WordList_Three = {
@@ -158,7 +161,6 @@ local function GetLetterDelay()
     return math.max(base, 0.005)
 end
 
--- Функция поиска: Сначала классика, затем фоллбэк на 286к с Render
 local function FindWordAuto(l)
     if not l or l == "" then return nil end
     local lowerL = string.lower(l)
@@ -246,7 +248,7 @@ local function GetLetters()
     return ""
 end
 
--- === ЧЕСТНЫЙ СЛУШАТЕЛЬ ЧУЖИХ СЛОВ ПО НЕТВОРКУ ===
+-- === СЛУШАТЕЛЬ ЧУЖИХ СЛОВ ПО НЕТВОРКУ ===
 local Network = Services.ReplicatedStorage:FindFirstChild("Network")
 if Network then
     local gameEvent = Network:FindFirstChild("GameEvent", true)
@@ -287,7 +289,7 @@ end
 local function SimulateBackspace()
     Services.VirtualInputManager:SendKeyEvent(true,  Enum.KeyCode.Backspace, false, game)
     task.wait(0.01)
-    Services.VirtualInputManager:SendKeyevent(false, Enum.KeyCode.Backspace, false, game)
+    Services.VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Backspace, false, game)
 end
 
 if Services.CoreGui:FindFirstChild("Unpatchabomb") then
@@ -300,7 +302,7 @@ Unpatchabomb.Parent           = Services.CoreGui
 Unpatchabomb.ZIndexBehavior   = Enum.ZIndexBehavior.Sibling
 Unpatchabomb.ResetOnSpawn     = false
 
--- === УДОБНЫЙ СЕРЧЕР СВЕРХУ ЭКРАНА (ПРЕВЬЮ СЛОВА) ===
+-- === ВЕРХНИЙ СЕРЧЕР (ПРЕВЬЮ СЛОВА) ===
 local TopSearchOverlay = Instance.new("TextLabel")
 TopSearchOverlay.Name = "TopSearchOverlay"
 TopSearchOverlay.Parent = Unpatchabomb
@@ -319,7 +321,6 @@ topStroke.Thickness = 1.5
 topStroke.Color = Color3.fromRGB(0, 150, 255)
 topStroke.Parent = TopSearchOverlay
 
--- Обновление верхнего серчера в реальном времени
 task.spawn(function()
     while task.wait(0.1) do
         pcall(function()
@@ -414,7 +415,7 @@ local function MakeIntroLabel(posY, sizeY, text, font)
 end
 
 MakeIntroLabel(0.38, 0.15, "UNPATCHABOMB", Enum.Font.GothamBold)
-MakeIntroLabel(0.54, 0.08, "TOP SEARCH EDITION")
+MakeIntroLabel(0.54, 0.08, "SAFE LOADER EDITION")
 local LoadingLabel = MakeIntroLabel(0.76, 0.08, "Loading...")
 
 task.spawn(function()
@@ -706,7 +707,7 @@ LetterBox.FocusLost:Connect(function(enterPressed)
         sub = GetLetters()
         if not sub or sub == "" then WordText.Text = "Error: empty input." return end
     end
-    WordText.Text = sub — " — Searching..."
+    WordText.Text = sub .. " — Searching..."
     task.wait(0.1)
     local word = FindWordAuto(sub)
     if word then
